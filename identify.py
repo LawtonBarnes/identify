@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """IDENTIFY -- labels a Pi's own screen so CRT layouts and cabling are
 easy to work out: page 1 is the Pi's short name huge over black, page 2
-is its full name, IP, screen resolution, disk space and USB devices.
+is its full name, IP, screen resolution, disk space and USB devices,
+page 3 (MOCKUP) is a full-screen design mockup for this screen from
+mockups/<label>.png (P1-P4 at 720x480, QUAD.png at 1024x768 for the
+whole wall) -- a place to park future-app ideas and see them on the real
+CRTs. Swap the PNGs to show a different mockup.
 
 Not a channel app. STRINGS runs it temporarily in place of whatever
 app is assigned (its /identify endpoint, broadcast to the whole fleet
@@ -37,10 +41,12 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
 import pygame  # noqa: E402  (must come after SDL env vars are set)
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 BASE_DIR = Path(__file__).resolve().parent
 FONT_PATH = BASE_DIR / "RobotoMono-Bold.ttf"
+MOCKUP_DIR = BASE_DIR / "mockups"
+PAGES = (1, 2, 3)
 CONTROL_PATH = Path("/tmp/identify.json")  # written by STRINGS
 CONTROL_POLL_SECONDS = 0.25
 INFO_REFRESH_SECONDS = 5  # re-gather page 2 info (a USB device plugged in mid-cabling shows up)
@@ -229,9 +235,31 @@ def draw_info(canvas, lines, rect, color):
         y += step
 
 
+def draw_mockup(canvas, hostname, color):
+    """Page 3: mockups/<label>.png scaled to fit (aspect kept), centered.
+    QUAD gets one image for the whole 1024x768 wall, not per quadrant."""
+    label = short_name(hostname)
+    path = MOCKUP_DIR / f"{label}.png"
+    try:
+        img = pygame.image.load(str(path)).convert()
+    except (pygame.error, FileNotFoundError):
+        rect = canvas.get_rect()
+        blit_centered(canvas, font(48).render(f"NO MOCKUP {label}", True, color), rect)
+        return
+    cw, ch = canvas.get_size()
+    scale = min(cw / img.get_width(), ch / img.get_height())
+    if scale != 1:
+        img = pygame.transform.smoothscale(
+            img, (round(img.get_width() * scale), round(img.get_height() * scale)))
+    canvas.blit(img, ((cw - img.get_width()) // 2, (ch - img.get_height()) // 2))
+
+
 def draw(canvas, page, color_name, hostname, info):
     canvas.fill(BLACK)
     color = COLORS.get(color_name, COLORS[DEFAULT_COLOR])
+    if page == 3:
+        draw_mockup(canvas, hostname, color)
+        return
     quad = host_key(hostname) in QUAD_HOSTS
     rects = regions(*canvas.get_size(), quad)
     labels = QUADRANTS if quad else [short_name(hostname)]
@@ -294,7 +322,7 @@ def read_control(default_page, default_color):
         return default_page, default_color
     page = data.get("page", default_page)
     color = data.get("color", default_color)
-    return (page if page in (1, 2) else default_page), (color if color in COLORS else default_color)
+    return (page if page in PAGES else default_page), (color if color in COLORS else default_color)
 
 
 class IdentifyApp:
@@ -361,7 +389,7 @@ def snapshot(path, size, page, color, hostname):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--page", type=int, choices=(1, 2), default=1)
+    parser.add_argument("--page", type=int, choices=PAGES, default=1)
     parser.add_argument("--color", choices=sorted(COLORS), default=DEFAULT_COLOR)
     parser.add_argument("--snapshot", metavar="PNG", help="render to a PNG instead of the framebuffer")
     parser.add_argument("--size", default="720x480", help="snapshot size, WxH")
