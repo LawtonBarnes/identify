@@ -1,5 +1,7 @@
 # IDENTIFY
 
+> **Fleet-only:** needs STRINGS on every Pi and SCRUTE on MP. Not useful on a single Pi.
+
 A cabling helper for the METAL SHOP Raspberry Pi CRT fleet (see [mcbrain](https://github.com/LawtonBarnes/mcbrain)). Turn it on from CENTRAL SCRUTINIZER and every Pi labels its own screen at once, so you can see which Pi feeds which CRT.
 
 - **Page 1:** the Pi's short name (P1–P4) in huge Roboto Mono Bold over black. QUAD, which drives the 2x2 wall at 1024x768, shows Q1–Q4, one per quadrant (top-left, top-right, bottom-left, bottom-right).
