@@ -4,9 +4,14 @@
 
 A cabling helper for the METAL SHOP Raspberry Pi CRT fleet (see [mcbrain](https://github.com/LawtonBarnes/mcbrain)). Turn it on from CENTRAL SCRUTINIZER and every Pi labels its own screen at once, so you can see which Pi feeds which CRT.
 
-- **Page 1:** the Pi's short name (P1–P4) in huge Roboto Mono Bold over black. QUAD, which drives the 2x2 wall at 1024x768, shows Q1–Q4, one per quadrant (top-left, top-right, bottom-left, bottom-right).
+- **Page 1:** the Pi's short name (P1–P4) in huge Roboto Mono Bold over black. QUAD, which drives the 2x2 wall at 1024x768, shows Q1–Q4, one per quadrant (top-left, top-right, bottom-left, bottom-right). Behind the label is a safe-area chart:
+  - **Screen edge:** an outline in the label color. Anything cut off there is lost to overscan.
+  - **Safe areas:** dimmer action-safe and title-safe boxes. 4:3 screens use the classic 90% / 80%. 16:9 screens (HIDEF, shown as HD) use SMPTE ST 2046-1's 93% / 90%, plus dashed 4:3 center-cut lines.
+  - **QUAD:** gets a separate chart per quadrant, since each one is its own CRT.
+  - **Line width:** 2 px on SD and 4 px at 1080, so 1080i doesn't flicker them.
+- **Sizes:** text scales with the screen height, so 1080-line screens match the 480-line ones.
 - **Page 2:** full hostname, IP address, screen resolution, free disk space and the USB devices plugged in (the Pi 3B+'s own hubs and Ethernet chip are left out). The text is sized to fit, and long device names wrap. On QUAD the info repeats in all four quadrants.
-- **Page 3 (MOCKUP):** a full-screen design mockup for this screen, from `mockups/<label>.png`: `P1.png`–`P4.png` at 720x480, and `QUAD.png` at 1024x768 for the whole wall. It's a place to park future-app ideas and see them on the real CRTs. Swap the PNGs to show a different mockup (currently NERD-E, 2026-11-07). Other sizes are scaled to fit.
+- **Page 3 (MOCKUP):** a full-screen design mockup for this screen, from `mockups/<label>.png`: `P1.png`–`P4.png` at 720x480, `QUAD.png` at 1024x768 for the whole wall, and `HD.png` at 1920x1080 for HIDEF (none yet, so it shows NO MOCKUP HD). It's a place to park future-app ideas and see them on the real CRTs. Swap the PNGs to show a different mockup (currently NERD-E, 2026-11-07). Other sizes are scaled to fit.
 
 Colors follow SCRUTE's current look: orange, green or white.
 

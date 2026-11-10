@@ -61,12 +61,25 @@ COLORS = {
 }
 DEFAULT_COLOR = "orange"
 
-LABEL_SIZE = 350  # page 1 on a single screen
+# Text sizes scale with the screen's height; these are the original
+# 720x480 values (QUAD's quadrants are 384 tall), so SD screens look the
+# same as before and 1080-line HD screens scale up to match.
+SD_HEIGHT = 480
+LABEL_SIZE = 350  # page 1 on a single screen, at SD_HEIGHT
 QUAD_LABEL_SIZE = 200  # page 1, one per quadrant
+QUAD_REGION_HEIGHT = 384
 INFO_SAFE = 0.10  # page 2 margin on each side (composite overscan)
-INFO_MAX_SIZE = 72
+INFO_MAX_SIZE = 72  # at SD_HEIGHT
 INFO_MIN_SIZE = 10
 INFO_LINE_GAP = 0.25  # fraction of a line's height
+
+# Page 1 safe-area chart, drawn behind the label in every region. A
+# region at least this wide for its height counts as 16:9 HD.
+HD_ASPECT = 1.6
+HD_SAFE = (("ACTION SAFE 93%", 0.93), ("TITLE SAFE 90%", 0.90))  # SMPTE ST 2046-1
+SD_SAFE = (("ACTION SAFE 90%", 0.90), ("TITLE SAFE 80%", 0.80))  # classic 4:3
+CHART_DIM = 0.55  # safe-area lines and captions, as a fraction of the label color
+CHART_DASH = 0.03  # 4:3 center-cut dash length, fraction of the height
 
 # Hostname (lowercase, letters/digits only) -> short label.
 SHORT_NAMES = {
@@ -207,11 +220,12 @@ def wrap(lines, cols):
     return out
 
 
-def fit(lines, box):
-    """Largest font size (and the lines wrapped for it) that fits `box`.
-    Roboto Mono is monospaced, so one character width gives the column
-    count; long USB names wrap rather than shrinking everything."""
-    for size in range(INFO_MAX_SIZE, INFO_MIN_SIZE - 1, -1):
+def fit(lines, box, max_size):
+    """Largest font size up to `max_size` (and the lines wrapped for it)
+    that fits `box`. Roboto Mono is monospaced, so one character width
+    gives the column count; long USB names wrap rather than shrinking
+    everything."""
+    for size in range(max_size, INFO_MIN_SIZE - 1, -1):
         f = font(size)
         wrapped = wrap(lines, box.w // f.size("M")[0])
         if wrapped is None:
@@ -222,9 +236,9 @@ def fit(lines, box):
     return INFO_MIN_SIZE, lines
 
 
-def draw_info(canvas, lines, rect, color):
+def draw_info(canvas, lines, rect, color, screen_h):
     box = rect.inflate(-int(rect.w * INFO_SAFE * 2), -int(rect.h * INFO_SAFE * 2))
-    size, lines = fit(lines, box)
+    size, lines = fit(lines, box, max(INFO_MAX_SIZE, round(INFO_MAX_SIZE * screen_h / SD_HEIGHT)))
     f = font(size)
     step = int(f.get_linesize() * (1 + INFO_LINE_GAP))
     block_h = step * len(lines) - int(f.get_linesize() * INFO_LINE_GAP)
@@ -255,6 +269,51 @@ def draw_mockup(canvas, hostname, color):
     canvas.blit(img, ((cw - img.get_width()) // 2, (ch - img.get_height()) // 2))
 
 
+def line_width(rect):
+    """Chart line thickness: 2 px on SD, 4 px at 1080. Always even and at
+    least 2, so 1080i's interlaced fields don't flicker a 1-line edge."""
+    return max(2, 2 * round(rect.h / 540))
+
+
+def draw_safe_chart(canvas, rect, color):
+    """Page 1 background: an outline at the region's edge (anything cut
+    off there is overscan), the action- and title-safe boxes, and on a
+    16:9 region the 4:3 center-cut lines, dashed. Captions sit inside:
+    action safe top-left, title safe top-right (on HD the two boxes are
+    only 1.5% apart, so they can't share a corner), 4:3 at the bottom of
+    the left center-cut line."""
+    dim = tuple(round(c * CHART_DIM) for c in color)
+    lw = line_width(rect)
+    hd = rect.w / rect.h >= HD_ASPECT
+    cap = font(max(14, round(rect.h / 40)))
+    pad = lw * 2
+
+    pygame.draw.rect(canvas, color, rect, lw)
+    # Captions get a black backing so the dashed 4:3 lines (drawn first)
+    # never run through them.
+    captions = []
+    if hd:
+        cut_w = round(rect.h * 4 / 3)
+        dash = max(lw * 2, round(rect.h * CHART_DASH))
+        for x in (rect.x + (rect.w - cut_w) // 2, rect.x + (rect.w + cut_w) // 2 - lw):
+            for y in range(rect.y, rect.bottom, dash * 2):
+                pygame.draw.rect(canvas, dim, (x, y, lw, min(dash, rect.bottom - y)))
+        surf = cap.render("4:3", True, dim, BLACK)
+        title_bottom = rect.bottom - round(rect.h * (1 - HD_SAFE[1][1]) / 2)
+        captions.append((surf, (rect.x + (rect.w - cut_w) // 2 + lw + pad,
+                                title_bottom - lw - pad - surf.get_height())))
+
+    for i, (caption, frac) in enumerate(HD_SAFE if hd else SD_SAFE):
+        box = rect.inflate(-round(rect.w * (1 - frac)), -round(rect.h * (1 - frac)))
+        pygame.draw.rect(canvas, dim, box, lw)
+        surf = cap.render(caption, True, dim, BLACK)
+        x = box.x + lw + pad if i == 0 else box.right - lw - pad - surf.get_width()
+        captions.append((surf, (x, box.y + lw + pad)))
+
+    for surf, pos in captions:
+        canvas.blit(surf, pos)
+
+
 def draw(canvas, page, color_name, hostname, info):
     canvas.fill(BLACK)
     color = COLORS.get(color_name, COLORS[DEFAULT_COLOR])
@@ -262,13 +321,18 @@ def draw(canvas, page, color_name, hostname, info):
         draw_mockup(canvas, hostname, color)
         return
     quad = host_key(hostname) in QUAD_HOSTS
+    screen_h = canvas.get_height()
     rects = regions(*canvas.get_size(), quad)
     labels = QUADRANTS if quad else [short_name(hostname)]
     for label, rect in zip(labels, rects):
         if page == 2:
-            draw_info(canvas, info_lines(label, info, quad), rect, color)
+            draw_info(canvas, info_lines(label, info, quad), rect, color, screen_h)
         else:
-            size = QUAD_LABEL_SIZE if quad else LABEL_SIZE
+            draw_safe_chart(canvas, rect, color)
+            if quad:
+                size = round(QUAD_LABEL_SIZE * rect.h / QUAD_REGION_HEIGHT)
+            else:
+                size = round(LABEL_SIZE * rect.h / SD_HEIGHT)
             blit_centered(canvas, font(size).render(label, True, color), rect)
 
 
