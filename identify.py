@@ -76,6 +76,7 @@ SHORT_NAMES = {
     "puppet4": "P4",
     "masterofpuppets": "MP",
     "quad": "QUAD",
+    "hidef": "HD",
 }
 QUAD_HOSTS = {"quad"}
 QUADRANTS = ["Q1", "Q2", "Q3", "Q4"]  # top-left, top-right, bottom-left, bottom-right
